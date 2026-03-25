@@ -1,17 +1,28 @@
 {
   "type": "module",
+  "ts-node": {
+    "esm": true,
+    "compilerOptions": {
+      "module": "nodenext",
+      "moduleResolution": "nodenext"
+    }
+  },
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:connection": "tsx src/scripts/testConnection.ts",
+    "test:vault": "tsx src/scripts/testVault.ts"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
     "ts-node": "^10.9.2",
+    "tsx": "^4.21.0",
     "typescript": "^6.0.2",
     "vitest": "^3.0.0"
   },
   "dependencies": {
     "@okxweb3/coin-ethereum": "^2.4.10",
-    "dotenv": "^16.4.0"
+    "dotenv": "^16.4.0",
+    "viem": "^2.22.0"
   }
 }
