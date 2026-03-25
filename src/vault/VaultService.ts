@@ -1,3 +1,5 @@
+import { createPublicClient, createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import type { IWalletAgent } from "../core/interfaces/IWalletAgent.js";
 import type { IVault, VaultConfig, VaultOperation } from "../core/interfaces/IVault.js";
 import type { TransactionReceipt } from "../core/interfaces/IWalletAgent.js";
@@ -10,29 +12,125 @@ import { logger } from "../utils/logger.js";
 
 const NATIVE_TOKEN = "0x0000000000000000000000000000000000000000";
 
+const VAULT_ABI = [
+  {
+    name: "deposit",
+    type: "function",
+    inputs: [],
+    outputs: [],
+    stateMutability: "payable",
+  },
+  {
+    name: "withdraw",
+    type: "function",
+    inputs: [{ name: "amount", type: "uint256" }],
+    outputs: [],
+    stateMutability: "nonpayable",
+  },
+  {
+    name: "getBalance",
+    type: "function",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+  {
+    name: "owner",
+    type: "function",
+    inputs: [],
+    outputs: [{ name: "", type: "address" }],
+    stateMutability: "view",
+  },
+] as const;
+
 export class VaultService implements IVault {
   private readonly walletAgent: IWalletAgent;
   private readonly config: VaultConfig;
   private readonly operationHistory: VaultOperation[] = [];
+  private readonly publicClient: ReturnType<typeof createPublicClient>;
+  private readonly walletClient: ReturnType<typeof createWalletClient>;
+  private readonly walletAddress: `0x${string}`;
 
   constructor(walletAgent: IWalletAgent, config: VaultConfig) {
     this.walletAgent = walletAgent;
     this.config = config;
-    logger.info("VaultService initialized", { vaultAddress: config.vaultAddress });
+
+    const rpcUrl = process.env.RPC_URL ?? "https://rpc.xlayer.tech";
+    const privateKey = process.env.PRIVATE_KEY as `0x${string}`;
+
+    this.publicClient = createPublicClient({
+      chain: {
+        id: 196,
+        name: "X Layer",
+        nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+        rpcUrls: { default: { http: [rpcUrl] } },
+      },
+      transport: http(rpcUrl),
+    });
+
+    const account = privateKeyToAccount(privateKey);
+    this.walletAddress = account.address;
+
+    this.walletClient = createWalletClient({
+      account,
+      chain: {
+        id: 196,
+        name: "X Layer",
+        nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+        rpcUrls: { default: { http: [rpcUrl] } },
+      },
+      transport: http(rpcUrl),
+    });
+
+    logger.info("VaultService initialized with contract", { vaultAddress: config.vaultAddress });
   }
 
   async deposit(tokenAddress: string, amount: bigint): Promise<TransactionReceipt> {
     this.validateDepositAmount(amount);
 
-    logger.info("Processing deposit", { tokenAddress, amount });
+    logger.info("Processing deposit to contract", { tokenAddress, amount });
 
-    const tx = this.buildDepositTx(tokenAddress, amount);
-    const receipt = await this.walletAgent.executeTransaction(tx);
+    const balanceBefore = await this.getVaultBalance(tokenAddress);
+    logger.info("Balance before deposit", { balance: balanceBefore.toString() });
 
-    this.recordOperation("deposit", amount, tokenAddress, receipt.transactionHash);
+    try {
+      const hash = await this.walletClient.writeContract({
+        address: this.config.vaultAddress as `0x${string}`,
+        abi: VAULT_ABI,
+        functionName: "deposit",
+        value: amount,
+      });
 
-    logger.info("Deposit completed", { txHash: receipt.transactionHash });
-    return receipt;
+      const receipt = await this.publicClient.waitForTransactionReceipt({
+        hash,
+      });
+
+      const txReceipt: TransactionReceipt = {
+        transactionHash: receipt.transactionHash,
+        blockNumber: receipt.blockNumber,
+        blockHash: receipt.blockHash,
+        status: receipt.status === "success",
+        gasUsed: receipt.gasUsed,
+        cumulativeGasUsed: receipt.cumulativeGasUsed,
+        logs: receipt.logs.map((log) => ({
+          address: log.address,
+          data: log.data,
+          topics: log.topics,
+          logIndex: BigInt(log.logIndex),
+        })),
+      };
+
+      this.recordOperation("deposit", amount, tokenAddress, txReceipt.transactionHash);
+
+      const balanceAfter = await this.getVaultBalance(tokenAddress);
+      logger.info("Deposit completed", { txHash: txReceipt.transactionHash, balanceAfter: balanceAfter.toString() });
+
+      return txReceipt;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      logger.error("Deposit failed", { error: message });
+      throw error;
+    }
   }
 
   async withdraw(
@@ -42,25 +140,67 @@ export class VaultService implements IVault {
   ): Promise<TransactionReceipt> {
     await this.validateWithdrawBalance(tokenAddress, amount);
 
-    logger.info("Processing withdrawal", { tokenAddress, amount, recipient });
+    logger.info("Processing withdrawal from contract", { tokenAddress, amount, recipient });
 
-    const tx = this.buildWithdrawTx(tokenAddress, amount, recipient);
-    const receipt = await this.walletAgent.executeTransaction(tx);
+    const balanceBefore = await this.getVaultBalance(tokenAddress);
+    logger.info("Balance before withdrawal", { balance: balanceBefore.toString() });
 
-    this.recordOperation(
-      "withdraw",
-      amount,
-      tokenAddress,
-      receipt.transactionHash,
-      recipient
-    );
+    try {
+      const hash = await this.walletClient.writeContract({
+        address: this.config.vaultAddress as `0x${string}`,
+        abi: VAULT_ABI,
+        functionName: "withdraw",
+        args: [amount],
+      });
 
-    logger.info("Withdrawal completed", { txHash: receipt.transactionHash });
-    return receipt;
+      const receipt = await this.publicClient.waitForTransactionReceipt({
+        hash,
+      });
+
+      const txReceipt: TransactionReceipt = {
+        transactionHash: receipt.transactionHash,
+        blockNumber: receipt.blockNumber,
+        blockHash: receipt.blockHash,
+        status: receipt.status === "success",
+        gasUsed: receipt.gasUsed,
+        cumulativeGasUsed: receipt.cumulativeGasUsed,
+        logs: receipt.logs.map((log) => ({
+          address: log.address,
+          data: log.data,
+          topics: log.topics,
+          logIndex: BigInt(log.logIndex),
+        })),
+      };
+
+      this.recordOperation(
+        "withdraw",
+        amount,
+        tokenAddress,
+        txReceipt.transactionHash,
+        recipient
+      );
+
+      const balanceAfter = await this.getVaultBalance(tokenAddress);
+      logger.info("Withdrawal completed", { txHash: txReceipt.transactionHash, balanceAfter: balanceAfter.toString() });
+
+      return txReceipt;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      logger.error("Withdrawal failed", { error: message });
+      throw error;
+    }
   }
 
   async getVaultBalance(tokenAddress: string): Promise<bigint> {
-    return this.walletAgent.getBalance(tokenAddress);
+    if (tokenAddress.toLowerCase() === NATIVE_TOKEN.toLowerCase()) {
+      const balance = await this.publicClient.readContract({
+        address: this.config.vaultAddress as `0x${string}`,
+        abi: VAULT_ABI,
+        functionName: "getBalance",
+      });
+      return balance as bigint;
+    }
+    return 0n;
   }
 
   async getDepositHistory(tokenAddress: string): Promise<VaultOperation[]> {
@@ -80,41 +220,12 @@ export class VaultService implements IVault {
     tokenAddress: string,
     amount: bigint
   ): Promise<void> {
-    const balance = await this.walletAgent.getBalance(tokenAddress);
+    const balance = await this.getVaultBalance(tokenAddress);
     if (balance < amount) {
       throw new WithdrawError(
         `Insufficient balance: have ${balance}, need ${amount}`
       );
     }
-  }
-
-  private buildDepositTx(tokenAddress: string, amount: bigint) {
-    const isNative = tokenAddress.toLowerCase() === NATIVE_TOKEN;
-    return {
-      to: this.config.vaultAddress,
-      value: isNative ? amount : 0n,
-      data: isNative ? "0x" : this.encodeErc20Transfer(amount),
-    };
-  }
-
-  private buildWithdrawTx(tokenAddress: string, amount: bigint, recipient: string) {
-    return {
-      to: tokenAddress,
-      value: 0n,
-      data: this.encodeErc20TransferTo(amount, recipient),
-    };
-  }
-
-  private encodeErc20Transfer(amount: bigint): string {
-    const methodId = "0xa9059cbb";
-    const paddedAmount = amount.toString(16).padStart(64, "0");
-    return `${methodId}${"0".repeat(24)}${this.config.vaultAddress.slice(2)}${paddedAmount}`;
-  }
-
-  private encodeErc20TransferTo(amount: bigint, recipient: string): string {
-    const methodId = "0xa9059cbb";
-    const paddedAmount = amount.toString(16).padStart(64, "0");
-    return `${methodId}${recipient.slice(2).padStart(64, "0")}${paddedAmount}`;
   }
 
   private recordOperation(
