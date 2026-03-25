@@ -7,6 +7,7 @@ Autonomous agent for asset management on X Layer (OKX L2, chainId: 196).
 An agentic wallet system for X Layer that provides:
 - Vault management (deposit/withdraw) with configurable limits
 - x402 payment protocol integration for autonomous micropayments
+- Agent orchestrator for autonomous decision cycles
 - Real-time X Layer RPC connectivity
 - Comprehensive error handling and logging
 
@@ -31,22 +32,27 @@ src/
 │   │   ├── PaymentErrors.ts
 │   │   ├── VaultErrors.ts
 │   │   └── WalletErrors.ts
-│   └── interfaces/            # Core interfaces
+│   └── interfaces/          # Core interfaces
 │       ├── IPaymentHandler.ts
+│       ├── IOrchestrator.ts
 │       ├── IVault.ts
 │       └── IWalletAgent.ts
+├── orchestrator/
+│   └── AgentOrchestrator.ts  # Autonomous agent cycles
 ├── payments/
 │   └── X402PaymentHandler.ts # x402 payment protocol
-├── scripts/                   # Integration scripts
+├── scripts/                  # Integration scripts
+│   ├── runAgent.ts          # Main demo entry point
 │   ├── testConnection.ts
 │   ├── testPayment.ts
 │   └── testVault.ts
 ├── utils/
-│   └── logger.ts             # Singleton logger
+│   └── logger.ts            # Singleton logger
 └── vault/
     └── VaultService.ts      # Vault management
 tests/
 ├── agent.test.ts
+├── orchestrator.test.ts
 ├── payment.test.ts
 └── vault.test.ts
 ```
@@ -62,11 +68,20 @@ npm install
 Copy `.env.example` to `.env` and configure:
 
 ```bash
+# X Layer RPC
 RPC_URL=https://rpc.xlayer.tech
+
+# Wallet (required for real transactions)
 PRIVATE_KEY=0x...          # Your wallet private key
-VAULT_ADDRESS=0x...       # Vault contract address
-MAX_DEPOSIT_AMOUNT=        # Max deposit in wei
-MIN_DEPOSIT_AMOUNT=        # Min deposit in wei
+
+# Vault Configuration
+VAULT_ADDRESS=0x...        # Vault contract address
+MAX_DEPOSIT_AMOUNT=        # Max deposit in wei (default: 1 OKB)
+MIN_DEPOSIT_AMOUNT=        # Min deposit in wei (default: 0.001 OKB)
+
+# Orchestrator Thresholds
+VAULT_THRESHOLD_LOW=       # Low balance threshold (default: 0.5 OKB)
+VAULT_THRESHOLD_CRITICAL= # Critical balance threshold (default: 0.1 OKB)
 ```
 
 ## Available Scripts
@@ -78,6 +93,8 @@ MIN_DEPOSIT_AMOUNT=        # Min deposit in wei
 | `npm run test:connection` | Test X Layer RPC connection |
 | `npm run test:vault` | Test vault service (read-only) |
 | `npm run test:payment` | Test x402 payment handler |
+| `npm run run:agent` | Run agent demo (with tsx) |
+| `npm run run:agent:ts-node` | Run agent with ts-node |
 
 ## Testing
 
@@ -90,6 +107,9 @@ npm run test:watch
 
 # Run specific test file
 npx vitest run tests/agent.test.ts
+
+# Run orchestrator tests
+npx vitest run tests/orchestrator.test.ts
 ```
 
 ## Integration Tests
@@ -103,6 +123,12 @@ npm run test:vault
 
 # Test payment handler flow
 npm run test:payment
+
+# Run full agent demo
+npm run run:agent
+
+# Run agent with ts-node
+npm run run:agent:ts-node
 ```
 
 ## Core Interfaces
@@ -124,6 +150,25 @@ npm run test:payment
 - `verifyPayment(txHash)` - Verify payment was successful
 - `getPaymentHistory()` - Get payment history
 
+### IOrchestrator
+- `start()` - Initialize all modules
+- `stop()` - Graceful shutdown
+- `getStatus()` - Get agent status (idle/running/stopped/error)
+- `runCycle()` - Execute one autonomous decision cycle
+
+## Agent Orchestrator
+
+The orchestrator runs autonomous decision cycles that:
+1. Check vault balance
+2. Evaluate health status (healthy/low/critical)
+3. Take appropriate action based on thresholds
+4. Log all decisions with timestamps
+
+### Vault Health Status
+- **healthy**: Balance above VAULT_THRESHOLD_LOW
+- **low**: Balance between VAULT_THRESHOLD_LOW and VAULT_THRESHOLD_CRITICAL
+- **critical**: Balance below VAULT_THRESHOLD_CRITICAL
+
 ## X Layer Configuration
 
 - **Chain ID**: 196
@@ -137,6 +182,7 @@ All errors are typed and extend `Error`:
 - `WalletErrors`: Connection, simulation, funds errors
 - `VaultErrors`: Deposit limits, withdrawal errors
 - `PaymentErrors`: Payment failures, verification errors
+- `InsufficientFundsError`, `DepositLimitExceededError`, etc.
 
 ## Development
 
@@ -144,8 +190,12 @@ All errors are typed and extend `Error`:
 # Type check
 npx tsc --noEmit
 
-# Run with debug logging
-DEBUG=true npm run test:connection
+# Run agent demo with real wallet
+npm run run:agent
+
+# Run agent with mock wallet (no PRIVATE_KEY required)
+# Just leave PRIVATE_KEY empty in .env
+npm run run:agent
 ```
 
 ## License
