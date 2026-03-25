@@ -12,7 +12,8 @@
     "test:watch": "vitest",
     "test:connection": "tsx src/scripts/testConnection.ts",
     "test:vault": "tsx src/scripts/testVault.ts",
-    "test:payment": "tsx src/scripts/testPayment.ts"
+    "test:payment": "tsx src/scripts/testPayment.ts",
+    "run:agent": "tsx src/scripts/runAgent.ts"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
