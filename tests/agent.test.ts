@@ -10,6 +10,7 @@ vi.mock("@okxweb3/coin-ethereum", () => ({
 
 describe("OKXAgenticWallet", () => {
   const originalEnv = process.env;
+  const testPrivateKey = "0x4d3418816dc6ecb93d9b9b076165b090ff0ffa75062de0b4f4180cf0a2e07003";
 
   beforeEach(() => {
     vi.resetModules();
@@ -29,7 +30,7 @@ describe("OKXAgenticWallet", () => {
     });
 
     it("lanza WalletConnectionError si falta RPC_URL", () => {
-      process.env.PRIVATE_KEY = "0x123";
+      process.env.PRIVATE_KEY = testPrivateKey;
       delete process.env.RPC_URL;
 
       expect(() => new OKXAgenticWallet()).toThrow(WalletConnectionError);
@@ -38,7 +39,7 @@ describe("OKXAgenticWallet", () => {
 
   describe("connect", () => {
     it("lanza WalletConnectionError si la wallet no está conectada", async () => {
-      process.env.PRIVATE_KEY = "0x1234567890abcdef";
+      process.env.PRIVATE_KEY = testPrivateKey;
       process.env.RPC_URL = "https://rpc.xlayer.tech";
 
       const wallet = new OKXAgenticWallet();
@@ -50,7 +51,7 @@ describe("OKXAgenticWallet", () => {
 
   describe("executeTransaction", () => {
     it("no ejecuta la transacción si simulateTransaction falla", async () => {
-      process.env.PRIVATE_KEY = "0x1234567890abcdef";
+      process.env.PRIVATE_KEY = testPrivateKey;
       process.env.RPC_URL = "https://rpc.xlayer.tech";
 
       const wallet = new OKXAgenticWallet();
@@ -58,7 +59,7 @@ describe("OKXAgenticWallet", () => {
 
       const tx = {
         to: "0x742d35Cc6634C0532925a3b844Bc9e7595f0fEb1",
-        value: BigInt(1000000),
+        value: BigInt(100000000000000000000),
       };
 
       await expect(wallet.executeTransaction(tx))

@@ -95,7 +95,7 @@ describe("AgentOrchestrator", () => {
 
     it("retorna 'low_balance_alert' cuando balance < threshold", async () => {
       mockVault.getVaultBalance = vi.fn().mockResolvedValue(
-        BigInt(500000000000000000)
+        BigInt(5000000000000000)
       );
 
       const orchestrator = new AgentOrchestrator(

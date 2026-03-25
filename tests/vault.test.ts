@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { VaultService } from "../src/vault/VaultService.js";
+import { VaultService, type VaultClients } from "../src/vault/VaultService.js";
 import type { IWalletAgent } from "../src/core/interfaces/IWalletAgent.js";
 import type { VaultConfig } from "../src/core/interfaces/IVault.js";
 import {
@@ -22,6 +22,25 @@ describe("VaultService", () => {
     logs: [],
   };
 
+  const createMockClients = (contractBalance: bigint = 0n): VaultClients => ({
+    publicClient: {
+      readContract: vi.fn().mockResolvedValue(contractBalance),
+      waitForTransactionReceipt: vi.fn().mockResolvedValue({
+        transactionHash: "0x123",
+        blockNumber: 1n,
+        blockHash: "0xabc",
+        status: "success",
+        gasUsed: 21000n,
+        cumulativeGasUsed: 21000n,
+        logs: [],
+      }),
+    } as any,
+    walletClient: {
+      writeContract: vi.fn().mockResolvedValue("0x123"),
+    } as any,
+    walletAddress: "0x742d35Cc6634C0532925a3b844Bc9e7595f0fEb1",
+  });
+
   beforeEach(() => {
     mockWalletAgent = {
       connect: vi.fn().mockResolvedValue(undefined),
@@ -39,7 +58,7 @@ describe("VaultService", () => {
 
   describe("deposit", () => {
     it("lanza DepositLimitExceededError si amount > maxDepositAmount", async () => {
-      const vault = new VaultService(mockWalletAgent, vaultConfig);
+      const vault = new VaultService(mockWalletAgent, vaultConfig, createMockClients());
 
       await expect(
         vault.deposit("0x0000000000000000000000000000000000000000", 2000000n)
@@ -47,7 +66,7 @@ describe("VaultService", () => {
     });
 
     it("lanza BelowMinimumDepositError si amount < minDepositAmount", async () => {
-      const vault = new VaultService(mockWalletAgent, vaultConfig);
+      const vault = new VaultService(mockWalletAgent, vaultConfig, createMockClients());
 
       await expect(
         vault.deposit("0x0000000000000000000000000000000000000000", 50n)
@@ -55,7 +74,7 @@ describe("VaultService", () => {
     });
 
     it("depósito exitoso agrega entrada al historial", async () => {
-      const vault = new VaultService(mockWalletAgent, vaultConfig);
+      const vault = new VaultService(mockWalletAgent, vaultConfig, createMockClients());
 
       await vault.deposit("0x0000000000000000000000000000000000000000", 500000n);
 
@@ -70,8 +89,7 @@ describe("VaultService", () => {
 
   describe("withdraw", () => {
     it("lanza WithdrawError si balance insuficiente", async () => {
-      mockWalletAgent.getBalance = vi.fn().mockResolvedValue(100n);
-      const vault = new VaultService(mockWalletAgent, vaultConfig);
+      const vault = new VaultService(mockWalletAgent, vaultConfig, createMockClients(100n));
 
       await expect(
         vault.withdraw(
@@ -84,17 +102,16 @@ describe("VaultService", () => {
   });
 
   describe("getVaultBalance", () => {
-    it("delega correctamente a IWalletAgent", async () => {
-      const vault = new VaultService(mockWalletAgent, vaultConfig);
+    it("retorna el balance del contrato via viem", async () => {
+      const mockClients = createMockClients(500n);
+      const vault = new VaultService(mockWalletAgent, vaultConfig, mockClients);
 
       const balance = await vault.getVaultBalance(
         "0x0000000000000000000000000000000000000000"
       );
 
-      expect(mockWalletAgent.getBalance).toHaveBeenCalledWith(
-        "0x0000000000000000000000000000000000000000"
-      );
-      expect(balance).toBe(1000000n);
+      expect(mockClients.publicClient?.readContract).toHaveBeenCalled();
+      expect(balance).toBe(500n);
     });
   });
 });

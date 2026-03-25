@@ -43,6 +43,12 @@ const VAULT_ABI = [
   },
 ] as const;
 
+export interface VaultClients {
+  publicClient?: ReturnType<typeof createPublicClient>;
+  walletClient?: ReturnType<typeof createWalletClient>;
+  walletAddress?: `0x${string}`;
+}
+
 export class VaultService implements IVault {
   private readonly walletAgent: IWalletAgent;
   private readonly config: VaultConfig;
@@ -51,12 +57,25 @@ export class VaultService implements IVault {
   private readonly walletClient: ReturnType<typeof createWalletClient>;
   private readonly walletAddress: `0x${string}`;
 
-  constructor(walletAgent: IWalletAgent, config: VaultConfig) {
+  constructor(walletAgent: IWalletAgent, config: VaultConfig, clients?: VaultClients) {
     this.walletAgent = walletAgent;
     this.config = config;
 
     const rpcUrl = process.env.RPC_URL ?? "https://rpc.xlayer.tech";
-    const privateKey = process.env.PRIVATE_KEY as `0x${string}`;
+
+    if (clients?.publicClient && clients?.walletClient && clients?.walletAddress) {
+      this.publicClient = clients.publicClient;
+      this.walletClient = clients.walletClient;
+      this.walletAddress = clients.walletAddress;
+      logger.info("VaultService initialized with provided clients");
+      return;
+    }
+
+    const privateKey = process.env.PRIVATE_KEY;
+
+    if (!privateKey) {
+      throw new Error("PRIVATE_KEY required for VaultService");
+    }
 
     this.publicClient = createPublicClient({
       chain: {
@@ -68,7 +87,7 @@ export class VaultService implements IVault {
       transport: http(rpcUrl),
     });
 
-    const account = privateKeyToAccount(privateKey);
+    const account = privateKeyToAccount(privateKey as `0x${string}`);
     this.walletAddress = account.address;
 
     this.walletClient = createWalletClient({
@@ -94,11 +113,18 @@ export class VaultService implements IVault {
     logger.info("Balance before deposit", { balance: balanceBefore.toString() });
 
     try {
+      const xlayerChain = {
+        id: 196,
+        name: "X Layer",
+        nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+        rpcUrls: { default: { http: ["https://rpc.xlayer.tech"] } },
+      };
       const hash = await this.walletClient.writeContract({
         address: this.config.vaultAddress as `0x${string}`,
         abi: VAULT_ABI,
         functionName: "deposit",
         value: amount,
+        chain: xlayerChain,
       });
 
       const receipt = await this.publicClient.waitForTransactionReceipt({
