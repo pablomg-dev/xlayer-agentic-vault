@@ -2,9 +2,10 @@
   "type": "module",
   "ts-node": {
     "esm": true,
+    "experimentalSpecifierResolution": "node",
     "compilerOptions": {
-      "module": "nodenext",
-      "moduleResolution": "nodenext"
+      "module": "ESNext",
+      "moduleResolution": "bundler"
     }
   },
   "scripts": {
@@ -13,11 +14,13 @@
     "test:connection": "tsx src/scripts/testConnection.ts",
     "test:vault": "tsx src/scripts/testVault.ts",
     "test:payment": "tsx src/scripts/testPayment.ts",
-    "run:agent": "tsx src/scripts/runAgent.ts"
+    "run:agent": "tsx src/scripts/runAgent.ts",
+    "run:agent:ts-node": "node --loader ts-node/esm --no-warnings src/scripts/runAgent.ts"
   },
   "devDependencies": {
     "@types/node": "^25.5.0",
     "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0",
     "typescript": "^6.0.2",
     "vitest": "^3.0.0"
