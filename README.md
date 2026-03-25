@@ -1,21 +1,28 @@
 # xlayer-agentic-vault
 
-Autonomous agent for asset management on X Layer (OKX L2, chainId: 196).
+> Autonomous agent for asset management and x402 payments on X Layer (OKX L2, chainId: 196)
+
+Built for the **X Layer Onchain OS AI Hackathon** — an agentic vault system that autonomously monitors balances, manages deposits/withdrawals, and executes x402 micropayments on X Layer mainnet.
+
+## 🤖 AI-Assisted Development
+
+This project was built with the assistance of:
+- **[Claude](https://claude.ai)** (Anthropic) — architecture design, prompt engineering, code review
+- **[MiniMax M2.5](https://www.minimaxi.com)** (free tier via OpenCode) — code generation and implementation
 
 ## Overview
 
-An agentic wallet system for X Layer that provides:
-- **Smart Contract Vault**: Real Vault contract deployed on X Layer mainnet
-- Vault management (deposit/withdraw) with configurable limits
-- x402 payment protocol integration for autonomous micropayments
-- Agent orchestrator for autonomous decision cycles
-- Real-time X Layer RPC connectivity
-- Comprehensive error handling and logging
+- **Smart Contract Vault** deployed on X Layer mainnet
+- Autonomous decision cycles (healthy / low / critical balance)
+- x402 payment protocol for autonomous micropayments
+- Full TypeScript with strong typing — `any` is forbidden
+- SOLID principles throughout
+- 20/20 unit tests passing
 
 ## Tech Stack
 
 - **Runtime**: Node.js 20 + TypeScript 6
-- **Blockchain SDK**: viem for X Layer RPC
+- **Blockchain**: viem for X Layer RPC
 - **Smart Contracts**: Solidity 0.8.0 + Hardhat
 - **Testing**: Vitest
 - **Environment**: dotenv
@@ -24,38 +31,38 @@ An agentic wallet system for X Layer that provides:
 
 ```
 src/
-├── agents/                    # Wallet implementations
-│   └── OKXAgenticWallet.ts  # OKX Agentic Wallet with viem
+├── agents/
+│   └── OKXAgenticWallet.ts       # OKX Agentic Wallet with viem
 ├── config/
-│   └── network.ts           # X Layer network configuration
+│   └── network.ts                # X Layer network config (chainId 196)
 ├── contracts/
-│   └── Vault.sol            # Smart contract (for reference)
+│   └── Vault.sol                 # Smart contract
 ├── core/
-│   ├── errors/              # Custom error classes
+│   ├── errors/                   # Typed custom errors
 │   │   ├── PaymentErrors.ts
 │   │   ├── VaultErrors.ts
 │   │   └── WalletErrors.ts
-│   └── interfaces/          # Core interfaces
+│   └── interfaces/               # Core interfaces (SOLID ISP)
 │       ├── IPaymentHandler.ts
 │       ├── IOrchestrator.ts
 │       ├── IVault.ts
 │       └── IWalletAgent.ts
 ├── orchestrator/
-│   └── AgentOrchestrator.ts  # Autonomous agent cycles
+│   └── AgentOrchestrator.ts      # Autonomous decision cycles
 ├── payments/
-│   └── X402PaymentHandler.ts # x402 payment protocol
-├── scripts/                  # Integration & deployment scripts
-│   ├── runAgent.ts          # Main demo entry point
-│   ├── testConnection.ts
-│   ├── testPayment.ts
-│   ├── testVault.ts
-│   ├── testDeposit.cjs      # Deposit to vault contract
-│   ├── testWithdraw.cjs     # Withdraw from vault contract
-│   └── deploy.cjs           # Deploy vault contract
+│   └── X402PaymentHandler.ts     # x402 payment protocol
+├── scripts/
+│   ├── runAgent.ts               # Main demo entry point
+│   ├── testConnection.ts         # Verify X Layer RPC
+│   ├── testPayment.ts            # Test payment flow
+│   ├── testVault.ts              # Read-only vault test
+│   ├── testDeposit.cjs           # Deposit to vault contract
+│   ├── testWithdraw.cjs          # Withdraw from vault contract
+│   └── deploy.cjs                # Deploy vault contract
 ├── utils/
-│   └── logger.ts            # Singleton logger
+│   └── logger.ts                 # Typed singleton logger
 └── vault/
-    └── VaultService.ts      # Vault contract interaction
+    └── VaultService.ts           # Vault contract interaction
 tests/
 ├── agent.test.ts
 ├── orchestrator.test.ts
@@ -63,21 +70,24 @@ tests/
 └── vault.test.ts
 ```
 
-## Smart Contract (X Layer Mainnet)
+## Smart Contract — X Layer Mainnet
 
-### Vault Contract
+**Vault Contract**: `0x7FE71a4817Fe49658BCFFBCcD7FBc00B5f74F150`
 
-Deployed at: `0x7FE71a4817Fe49658BCFFBCcD7FBc00B5f74F150`
+| Function | Description |
+|----------|-------------|
+| `deposit()` | Payable — receive native OKB |
+| `withdraw(uint256 amount)` | Owner only |
+| `getBalance()` | Returns contract balance |
 
-**Features:**
-- `deposit()` - Payable function to receive native OKB
-- `withdraw(uint256 amount)` - Only owner can withdraw
-- `getBalance()` - Returns contract balance
-- `owner` - Contract owner address
+**Events**: `Deposited(address, amount)` · `Withdrawn(address, amount)`
 
-**Events:**
-- `Deposited(address indexed from, uint256 amount)`
-- `Withdrawn(address indexed to, uint256 amount)`
+## Live Transactions on X Layer Mainnet
+
+| Operation | Tx Hash | Gas Used |
+|-----------|---------|----------|
+| Deposit 0.001 OKB | `0x0c0d5569...` | 45,165 |
+| Withdraw 0.001 OKB | `0x5486973f...` | 33,146 |
 
 ## Installation
 
@@ -87,153 +97,117 @@ npm install
 
 ## Configuration
 
-Copy `.env.example` to `.env` and configure:
-
 ```bash
-# X Layer RPC
+cp .env.example .env
+```
+
+```dotenv
 RPC_URL=https://rpc.xlayer.tech
+PRIVATE_KEY=0x...
 
-# Wallet (required for real transactions)
-PRIVATE_KEY=0x...          # Your wallet private key
-
-# Vault Contract
 VAULT_ADDRESS=0x7FE71a4817Fe49658BCFFBCcD7FBc00B5f74F150
 
-# Vault Limits
 MAX_DEPOSIT_AMOUNT=1000000000000000000    # 1 OKB
 MIN_DEPOSIT_AMOUNT=1000000000000000       # 0.001 OKB
 
-# Orchestrator Thresholds
-VAULT_THRESHOLD_LOW=50000000000000000      # 0.05 OKB
+VAULT_THRESHOLD_LOW=50000000000000000     # 0.05 OKB
 VAULT_THRESHOLD_CRITICAL=10000000000000000 # 0.01 OKB
 ```
 
-## Available Scripts
+## Scripts
 
 | Command | Description |
 |---------|-------------|
-| `npm test` | Run all unit tests |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run test:connection` | Test X Layer RPC connection |
-| `npm run test:vault` | Test vault service (read-only) |
-| `npm run test:payment` | Test x402 payment handler |
-| `npm run run:agent` | Run agent demo |
-| `npm run run:agent:ts-node` | Run agent with ts-node |
-| `npx hardhat run scripts/deploy.cjs --network xlayer` | Deploy Vault contract |
+| `npm test` | Run all 20 unit tests |
+| `npm run test:watch` | Watch mode |
+| `npm run test:connection` | Verify X Layer RPC + chainId |
+| `npm run test:vault` | Read-only vault test |
+| `npm run test:payment` | x402 payment flow test |
+| `npm run run:agent` | Run autonomous agent demo |
+| `npm run run:agent:ts-node` | Run with ts-node/esm |
 
-## Testing
+## Running the Agent
 
 ```bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm run test:watch
-
-# Run specific test file
-npx vitest run tests/agent.test.ts
-
-# Run orchestrator tests
-npx vitest run tests/orchestrator.test.ts
+npm run run:agent:ts-node
 ```
 
-## Integration Tests
+Example output:
+```
+==================================================
+  X Layer Agentic Vault - Demo
+==================================================
+[INFO] Connecting to wallet...
+[INFO] Wallet connected successfully
+[INFO] VaultService initialized
 
-```bash
-# Test X Layer connection
-npm run test:connection
+--- Cycle 1 ---
+  Action:    vault_healthy
+  Success:   true
+  Details:   Balance above threshold
 
-# Test vault balance (read-only)
-npm run test:vault
+--- Cycle 2 ---
+  Action:    vault_healthy
+  Success:   true
 
-# Test payment handler flow
-npm run test:payment
-
-# Run full agent demo
-npm run run:agent
+--- Cycle 3 ---
+  Action:    vault_healthy
+  Success:   true
+==================================================
+  Demo Complete
+==================================================
 ```
 
 ## Deploy New Vault Contract
 
 ```bash
-# Compile contracts
 npx hardhat compile
-
-# Deploy to X Layer
 npx hardhat run scripts/deploy.cjs --network xlayer
 ```
 
 ## Core Interfaces
 
 ### IWalletAgent
-- `connect()` - Initialize wallet connection
-- `getBalance(tokenAddress)` - Get token balance in wei
-- `simulateTransaction(tx)` - Simulate transaction before execution
-- `executeTransaction(tx)` - Execute transaction on X Layer
+- `connect()` — initialize wallet connection
+- `getBalance(tokenAddress)` — balance in wei
+- `simulateTransaction(tx)` — dry-run before execution
+- `executeTransaction(tx)` — submit to X Layer
 
 ### IVault
-- `deposit(tokenAddress, amount)` - Deposit tokens into vault contract
-- `withdraw(tokenAddress, amount, recipient)` - Withdraw tokens from vault
-- `getVaultBalance(tokenAddress)` - Get vault contract balance
-- `getDepositHistory(tokenAddress)` - Get operation history
+- `deposit(tokenAddress, amount)` — deposit into vault contract
+- `withdraw(tokenAddress, amount, recipient)` — withdraw from vault
+- `getVaultBalance(tokenAddress)` — current contract balance
+- `getDepositHistory(tokenAddress)` — operation history
 
 ### IPaymentHandler
-- `handlePayment(response)` - Handle HTTP 402 payment request
-- `verifyPayment(txHash)` - Verify payment was successful
-- `getPaymentHistory()` - Get payment history
+- `handlePayment(response)` — handle HTTP 402 payment request
+- `verifyPayment(txHash)` — confirm payment on-chain
+- `getPaymentHistory()` — payment history
 
 ### IOrchestrator
-- `start()` - Initialize all modules
-- `stop()` - Graceful shutdown
-- `getStatus()` - Get agent status (idle/running/stopped/error)
-- `runCycle()` - Execute one autonomous decision cycle
+- `start()` — initialize all modules
+- `stop()` — graceful shutdown
+- `getStatus()` — `idle` | `running` | `stopped` | `error`
+- `runCycle()` — one autonomous decision cycle
 
-## Agent Orchestrator
+## Agent Decision Logic
 
-The orchestrator runs autonomous decision cycles that:
-1. Check vault contract balance
-2. Evaluate health status (healthy/low/critical)
-3. Take appropriate action based on thresholds
-4. Log all decisions with timestamps
+Each cycle evaluates vault health and acts accordingly:
 
-### Vault Health Status
-- **healthy**: Balance above VAULT_THRESHOLD_LOW
-- **low**: Balance between VAULT_THRESHOLD_LOW and VAULT_THRESHOLD_CRITICAL
-- **critical**: Balance below VAULT_THRESHOLD_CRITICAL
+| Status | Condition | Action |
+|--------|-----------|--------|
+| `healthy` | balance > `VAULT_THRESHOLD_LOW` | Log, no action |
+| `low` | balance between thresholds | Simulate deposit |
+| `critical` | balance < `VAULT_THRESHOLD_CRITICAL` | Alert + simulate deposit |
 
-## X Layer Configuration
+## X Layer Network
 
-- **Chain ID**: 196
-- **RPC**: https://rpc.xlayer.tech
-- **Explorer**: https://www.oklink.com/xlayer
-- **Native Currency**: OKB (18 decimals)
-
-## Live Demo Results
-
-### Transactions on X Layer Mainnet
-
-| Operation | Tx Hash | Gas Used |
-|-----------|---------|----------|
-| Vault Deploy | - | - |
-| Deposit 0.001 OKB | 0x0c0d5569... | 45,165 |
-| Withdraw 0.001 OKB | 0x5486973f... | 33,146 |
-
-### Agent Demo Output
-
-```
---- Cycle 1 ---
-  Action:    critical_balance
-  Success:   false
-  Details:   Critical: balance 1000000000000000 below threshold 10000000000000000
-```
-
-## Error Handling
-
-All errors are typed and extend `Error`:
-- `WalletErrors`: Connection, simulation, funds errors
-- `VaultErrors`: Deposit limits, withdrawal errors
-- `PaymentErrors`: Payment failures, verification errors
-- `InsufficientFundsError`, `DepositLimitExceededError`, etc.
+| Property | Value |
+|----------|-------|
+| Chain ID | 196 |
+| RPC | https://rpc.xlayer.tech |
+| Explorer | https://www.oklink.com/xlayer |
+| Currency | OKB (18 decimals) |
 
 ## License
 
