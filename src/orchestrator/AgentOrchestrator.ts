@@ -6,8 +6,8 @@ import { logger } from "../utils/logger.js";
 
 export type VaultHealthStatus = "healthy" | "low" | "critical";
 
-const DEFAULT_LOW_THRESHOLD = BigInt(1000000000000000000);
-const DEFAULT_CRITICAL_THRESHOLD = BigInt(100000000000000000);
+const DEFAULT_LOW_THRESHOLD = BigInt(10000000000000000);    // 0.01 OKB
+const DEFAULT_CRITICAL_THRESHOLD = BigInt(1000000000000000);  // 0.001 OKB
 
 export class AgentOrchestrator implements IOrchestrator {
   private status: AgentStatus = "idle";

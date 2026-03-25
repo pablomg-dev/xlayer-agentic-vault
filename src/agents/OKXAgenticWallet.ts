@@ -1,3 +1,5 @@
+import { createPublicClient, createWalletClient, http } from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 import type {
   IWalletAgent,
   TransactionRequest,
@@ -13,13 +15,12 @@ import { logger } from "../utils/logger.js";
 
 const NATIVE_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000";
 
-/**
- * Implementación de IWalletAgent usando el SDK @okxweb3/coin-ethereum.
- * Proporciona integración con la Agentic Wallet de OKX en X Layer.
- */
 export class OKXAgenticWallet implements IWalletAgent {
   private readonly privateKey: string;
   private readonly rpcUrl: string;
+  private readonly publicClient: ReturnType<typeof createPublicClient>;
+  private readonly walletClient: ReturnType<typeof createWalletClient>;
+  private readonly walletAddress: `0x${string}`;
   private connected: boolean = false;
 
   constructor() {
@@ -35,14 +36,42 @@ export class OKXAgenticWallet implements IWalletAgent {
 
     this.privateKey = privateKey;
     this.rpcUrl = rpcUrl;
-    logger.info("OKXAgenticWallet configured", { rpcUrl });
+
+    this.publicClient = createPublicClient({
+      chain: {
+        id: 196,
+        name: "X Layer",
+        nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+        rpcUrls: { default: { http: [rpcUrl] } },
+      },
+      transport: http(rpcUrl),
+    });
+
+    const account = privateKeyToAccount(privateKey as `0x${string}`);
+    this.walletAddress = account.address;
+
+    this.walletClient = createWalletClient({
+      account,
+      chain: {
+        id: 196,
+        name: "X Layer",
+        nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 },
+        rpcUrls: { default: { http: [rpcUrl] } },
+      },
+      transport: http(rpcUrl),
+    });
+
+    logger.info("OKXAgenticWallet configured", {
+      rpcUrl,
+      walletAddress: this.walletAddress,
+    });
   }
 
   async connect(): Promise<void> {
     logger.info("Connecting to wallet...");
     try {
       this.connected = true;
-      logger.info("Wallet connected successfully");
+      logger.info("Wallet connected successfully", { address: this.walletAddress });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       throw new WalletConnectionError(message);
@@ -50,7 +79,7 @@ export class OKXAgenticWallet implements IWalletAgent {
   }
 
   async getBalance(tokenAddress: string): Promise<bigint> {
-    logger.debug("Getting balance", { tokenAddress });
+    logger.debug("Getting balance", { tokenAddress, wallet: this.walletAddress });
 
     if (!this.connected) {
       throw new WalletConnectionError("Wallet not connected. Call connect() first.");
@@ -139,32 +168,75 @@ export class OKXAgenticWallet implements IWalletAgent {
   }
 
   private async getNativeBalance(): Promise<bigint> {
-    return 0n;
+    return this.publicClient.getBalance({ address: this.walletAddress as `0x${string}` });
   }
 
-  private async getErc20Balance(_tokenAddress: string): Promise<bigint> {
-    return 0n;
+  private async getErc20Balance(tokenAddress: string): Promise<bigint> {
+    const abi = [
+      {
+        name: "balanceOf",
+        type: "function",
+        inputs: [{ name: "owner", type: "address" }],
+        outputs: [{ name: "balance", type: "uint256" }],
+        stateMutability: "view",
+      },
+    ];
+
+    const result = await this.publicClient.readContract({
+      address: tokenAddress as `0x${string}`,
+      abi,
+      functionName: "balanceOf",
+      args: [this.walletAddress as `0x${string}`],
+    });
+
+    return result as bigint;
   }
 
-  private async estimateGas(_tx: TransactionRequest): Promise<bigint> {
-    return 21000n;
+  private async estimateGas(tx: TransactionRequest): Promise<bigint> {
+    try {
+      const gas = await this.publicClient.estimateGas({
+        account: this.walletAddress as `0x${string}`,
+        to: tx.to as `0x${string}`,
+        value: tx.value,
+        data: tx.data as `0x${string}` | undefined,
+      });
+      return gas;
+    } catch {
+      return 21000n;
+    }
   }
 
-  private async sendRawTransaction(_tx: TransactionRequest): Promise<string> {
-    return "0x";
+  private async sendRawTransaction(tx: TransactionRequest): Promise<string> {
+    const hash = await this.walletClient.sendTransaction({
+      chain: { id: 196, name: "X Layer", nativeCurrency: { name: "OKB", symbol: "OKB", decimals: 18 }, rpcUrls: { default: { http: [this.rpcUrl] } } },
+      account: this.walletAddress,
+      to: tx.to as `0x${string}`,
+      value: tx.value,
+      data: tx.data as `0x${string}` | undefined,
+    });
+    return hash;
   }
 
   private async waitForTransactionReceipt(
-    _txHash: string
+    txHash: string
   ): Promise<TransactionReceipt> {
+    const receipt = await this.publicClient.waitForTransactionReceipt({
+      hash: txHash as `0x${string}`,
+    });
+
     return {
-      transactionHash: "0x",
-      blockNumber: 0n,
-      blockHash: "0x",
-      status: true,
-      gasUsed: 21000n,
-      cumulativeGasUsed: 21000n,
-      logs: [],
+      transactionHash: receipt.transactionHash,
+      blockNumber: receipt.blockNumber,
+      blockHash: receipt.blockHash,
+      status: receipt.status === "success",
+      gasUsed: receipt.gasUsed,
+      cumulativeGasUsed: receipt.cumulativeGasUsed,
+      logs: receipt.logs.map((log) => ({
+        address: log.address,
+        data: log.data,
+        topics: log.topics,
+        logIndex: BigInt(log.logIndex),
+      })),
     };
   }
 }
